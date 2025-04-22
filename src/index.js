@@ -5,49 +5,52 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const otpGenerator = require('otp-generator');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const mongoose = require('mongoose');
 
-const { adminCollection } = require("./confing"); 
-const { stockCollection } = require("./confing"); 
-const { orderCollection } = require("./confing"); 
-const { OTPCollection } = require("./confing"); 
+const { adminCollection, stockCollection, orderCollection, OTPCollection } = require("./confing");
+
+const app = express();
+
+// MongoDB Connection
+mongoose.connect('mongodb://localhost:27017/shopManagement', { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('Connected to MongoDB'))
+    .catch((err) => console.error('MongoDB connection error:', err));
 
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'hardbosamiya9b@gmail.com', 
-        pass: 'jsbw quqt tkul zoft' 
+        user: 'hardbosamiya9b@gmail.com',
+        pass: 'jsbw quqt tkul zoft' // Use environment variables for sensitive data
     }
 });
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-const app = express();
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Setup session middleware
+// Session management using MongoDB
 app.use(session({
-    secret: 'yourSecretKey', // You can change this to a random string for better security
+    secret: 'yourSecretKey',
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false }  // Set to true if using HTTPS
+    store: MongoStore.create({ mongoUrl: 'mongodb://localhost:27017/shopManagement' }),
+    cookie: { 
+        secure: false, // set to true in production if using HTTPS
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // Session expires after 24 hours
+    }
 }));
 
 app.set('view engine', 'ejs');
 app.use(express.static("public"));
 
-console.log("adminCollection Model:", adminCollection);
-console.log("stockCollection Model:", stockCollection);
-console.log("orderCollection Model:", orderCollection);
-console.log("OTPCollection Model:", OTPCollection);
-
 // Home route
 app.get("/", async (req, res) => {
     try {
-        const products = await stockCollection.find({}, { image: 1, buyingPrice: 1, sellingPrice: 1, productName: 1, productId: 1 }).limit(100);  // Fetch first 100 products
-
+        const products = await stockCollection.find({}, { image: 1, buyingPrice: 1, sellingPrice: 1, productName: 1, productId: 1 }).limit(100);
         res.render("home", { products, USERNAME: req.session.username });
     } catch (error) {
         console.error(error);
@@ -69,7 +72,7 @@ app.get("/logout", async (req, res) => {
                     <script>
                         setTimeout(() => {
                             document.getElementById('redirectForm').submit();
-                        }, 1000); // 1-second delay
+                        }, 1000); 
                     </script>
                     <form id="redirectForm" action="/" method="get">
                     </form>
@@ -84,21 +87,52 @@ app.get("/login", (req, res) => {
     res.render("login");
 });
 
-// Orders page route
-app.post("/orders", async (req, res) => {
-    res.render("orders");
+// Login POST route
+app.post("/login", async (req, res) => {
+    try {
+        const user = await adminCollection.findOne({ name: req.body.name });
+
+        if (!user) {
+            return res.send("User not found.");
+        }
+
+        const isPasswordMatch = await bcrypt.compare(req.body.password, user.password);
+
+        if (isPasswordMatch) {
+            // Generate a new session ID for the user
+            const sessionId = crypto.randomBytes(16).toString('hex');
+            await adminCollection.updateOne({ name: req.body.name }, { $set: { sessionId: sessionId } });
+
+            req.session.username = req.body.name; // Set username in session
+            req.session.sessionId = sessionId;  // Store sessionId in session
+
+            if (user.userType === "admin") {
+                return res.render("admin");
+            } else {
+                return res.redirect("/");
+            }
+        } else {
+            return res.send("Wrong password.");
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).send("Error logging in.");
+    }
 });
 
-// Product page route
-app.post("/order", async (req, res) => {
-    const { productId } = req.body;
-    const product = await stockCollection.findById(productId); 
-
-    res.render("order", {
-        productName: product.productName,
-        image: product.image,
-        buyingPrice: product.buyingPrice
-    });
+// Middleware to enforce session ID matching
+app.use(async (req, res, next) => {
+    if (req.session.username) {
+        const user = await adminCollection.findOne({ name: req.session.username });
+        if (user.sessionId !== req.session.sessionId) {
+            // Session mismatch, force logout
+            req.session.destroy(() => {
+                res.redirect("/login");
+            });
+            return;
+        }
+    }
+    next();
 });
 
 // Signup route
@@ -108,7 +142,7 @@ app.post("/signup", async (req, res) => {
             name: req.body.name,
             password: req.body.password,
             email: " ",
-            userType: "user" 
+            userType: "user"
         };
 
         const existingUser = await adminCollection.findOne({ name: data.name });
@@ -123,7 +157,7 @@ app.post("/signup", async (req, res) => {
         await adminCollection.create(data);
         console.log("User registered:", data.name);
 
-        res.redirect("/"); 
+        res.redirect("/");
     } catch (error) {
         console.error(error);
         res.status(500).send("Error registering user.");
@@ -135,54 +169,8 @@ app.get("/signup", async (req, res) => {
     return res.render("signup");
 });
 
-// Login POST route
-app.post("/login", async (req, res) => {
-    if (req.body.which == 1) {
-        const orders = await orderCollection.find({}, { _id: 1, userName: 1, productName: 1, quantity: 1, Address: 1, phoneNumber: 1 });
-        return res.render("orders", { orders });
-    }
-
-    if (req.body.which == 2) {
-        const products = await stockCollection.find({}, { _id: 1, productName: 1, quantity: 1, buyingPrice: 1, sellingPrice: 1, category: 1, quantityType: 1, image: 1 });
-        const modifiedProducts = products.map(product => ({
-            ...product._doc,
-            image: product.image ? `data:image/png;base64,${product.image.toString('base64')}` : null
-        }));
-
-        return res.render("myproduct", { products: modifiedProducts });
-    }
-
-    try {
-        const user = await adminCollection.findOne({ name: req.body.name });
-
-        if (!user) {
-            return res.send("User not found.");
-        }
-
-        const isPasswordMatch = await bcrypt.compare(req.body.password, user.password);
-
-        if (isPasswordMatch) {
-            req.session.username = req.body.name; // Set the username in the session
-            if (user.userType == "admin") {
-                return res.render("admin");
-            } else {
-                return res.redirect("/");
-            }
-        } else {
-            return res.send("Wrong password.");
-        }
-    } catch (error) {
-        console.error(error);
-        res.status(500).send("Error logging in.");
-    }
-});
-
 // Admin actions route
 app.post("/admin", upload.single("image"), async (req, res) => {
-    console.log("Headers:", req.headers);
-    console.log("Request Body:", req.body);
-    console.log("Uploaded File:", req.file); 
-
     if (!req.file) {
         return res.status(400).send("No image uploaded.");
     }
@@ -221,7 +209,7 @@ app.post("/orderPlace", async (req, res) => {
                     <script>
                         setTimeout(() => {
                             document.getElementById('redirectForm').submit();
-                        }, 1000); // 1-second delay
+                        }, 1000); 
                     </script>
                     <form id="redirectForm" action="/login" method="get">
                     </form>
@@ -232,7 +220,7 @@ app.post("/orderPlace", async (req, res) => {
         if (phoneNumber.toString().length !== 10) {
             return res.send("Invalid phone number");
         } else {
-            orderCollection.create(data);
+            await orderCollection.create(data);
         }
         return res.render("orderplaced");
     }
@@ -260,10 +248,8 @@ app.post("/send-otp", async (req, res) => {
     const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    console.log(otp);
-
-    const email = user.email; 
-    const deletes = await OTPCollection.deleteMany({ email: user.email });
+    const email = user.email;
+    await OTPCollection.deleteMany({ email: user.email });
 
     await OTPCollection.create({ email: user.email, otp: otpHash, expiresAt });
 
@@ -279,7 +265,6 @@ app.post("/send-otp", async (req, res) => {
             console.error(error);
             return res.status(500).send("Error sending OTP");
         }
-        console.log("OTP sent: " + info.response);
         res.status(200).send(`<!DOCTYPE html>
             <html lang="en">
             <head>
