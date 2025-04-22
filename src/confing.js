@@ -12,15 +12,6 @@ mongoose.connect(process.env.MONGO_URI, {
   console.error("❌ MongoDB connection error:", error.message);
 });
 
-// Check if the database is connected
-mongoose.connection.once('open', () => {
-    console.log("Database connected successfully");
-});
-
-mongoose.connection.on('error', (error) => {
-    console.log("❌ Database connection error:", error.message);
-});
-
 // Create Schema for login
 const LoginSchema = new mongoose.Schema({
     name: {
@@ -114,10 +105,10 @@ const OTPSchema = new mongoose.Schema({
 });
 
 // Define the collections
-const adminCollection = new mongoose.model("admin", LoginSchema);
-const stockCollection = new mongoose.model("stock", StockSchema);
-const orderCollection = new mongoose.model("order", OrderSchema);
-const OTPCollection = new mongoose.model("OTP", OTPSchema);
+const adminCollection = mongoose.model("admin", LoginSchema);
+const stockCollection = mongoose.model("stock", StockSchema);
+const orderCollection = mongoose.model("order", OrderSchema);
+const OTPCollection = mongoose.model("OTP", OTPSchema);
 
 // Export collections to use elsewhere in the project
 module.exports = { adminCollection, stockCollection, orderCollection, OTPCollection };
