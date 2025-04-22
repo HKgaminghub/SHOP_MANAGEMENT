@@ -6,7 +6,6 @@
     <title>ShopEasy</title>
     <link rel="stylesheet" href="/style.css">
     <style>
-
         .navbar {
             width: 100%;
             background-color: #333;
@@ -20,7 +19,7 @@
             left: 0;
             z-index: 1000;
         }
-        
+
         body {
             padding-top: 60px; 
             height: 100vh;
@@ -31,7 +30,6 @@
             margin: 0;
             font-family: Arial, sans-serif;
         }
-        
 
         .navbar h1 {
             position: absolute;
@@ -42,11 +40,10 @@
             color: #d0d00b;
         }
 
-        .navbar h2{
+        .navbar h2 {
             transform: translateX();
             margin: 0;
         }
-
 
         .navbar a {
             color: #d0d00b;
@@ -105,38 +102,33 @@
             background-color: #d0d00b;
         }
 
-        h2{
+        h2 {
             color: #d0d00b;
         }
-
     </style>
 </head>
 <body>
-
 
     <div class="navbar">
         <h2>ShopEasy</h2>
         <h1>Welcome to ShopEasy</h1>
         <div>
-            <% if (USERNAME=="") {%>
+            <% if (!USERNAME || USERNAME === "") { %>
                 <a href="/">Home</a>
                 <a href="/login">Login</a>
-            <% }else{ %>
+            <% } else { %>
                 <a href="/">Home</a>
                 <a href="/logout">LogOut</a>
             <% } %>
         </div>
     </div>
-    
-
-
 
     <div class="product-grid">
         <% products.forEach(product => { %>
             <div class="product-card">
                 <form action="/order" method="post">
                     <p class="product-price"><%= product.productName %></p>
-                    <img src="data:image/jpeg;base64,<%= product.image.toString('base64') %>" alt="Product Image">
+                    <img src="<%= product.image ? 'data:image/jpeg;base64,' + product.image.toString('base64') : '' %>" alt="Product Image">
                     <p class="product-price">Price: ₹<%= product.sellingPrice %></p>
                     <button type="submit" class="order-btn">Order Now</button>
                     <input type="hidden" name="productId" value="<%= product._id %>">
