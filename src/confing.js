@@ -12,13 +12,13 @@ mongoose.connect(process.env.MONGO_URI, {
   console.error("❌ MongoDB connection error:", error.message);
 });
 
-
 // Check if the database is connected
-login_connect.then(() => {
+mongoose.connection.once('open', () => {
     console.log("Database connected successfully");
-})
-.catch(() => {
-    console.log("Database cannot be connected");
+});
+
+mongoose.connection.on('error', (error) => {
+    console.log("❌ Database connection error:", error.message);
 });
 
 // Create Schema for login
