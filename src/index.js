@@ -138,7 +138,7 @@ app.post("/login", async (req, res) => {
 
     if (req.body.which == 2) {
         const products = await stockCollection.find({}, { _id: 1, productName: 1, quantity: 1, buyingPrice: 1, sellingPrice: 1, category: 1, quantityType: 1, image: 1 });
-
+                
         const modifiedProducts = products.map(product => ({
             ...product._doc,
             image: product.image ? `data:image/png;base64,${product.image.toString('base64')}` : null
