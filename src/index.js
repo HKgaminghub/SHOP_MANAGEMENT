@@ -32,7 +32,7 @@ app.use(session({
     secret: 'yourSecretKey',
     resave: false,
     saveUninitialized: true,
-    store: MongoStore.create({ mongoUrl: 'mongodb://localhost:27017/shopManagement' }),
+    store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: { 
         secure: false, // set to true in production if using HTTPS
         httpOnly: true,
